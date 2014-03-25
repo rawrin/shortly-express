@@ -123,9 +123,10 @@ app.post('/links', checkUser, function(req, res) {
     return res.send(404);
   }
 
-  Link.forge({ url: uri }).fetch().then(function(found) {
+  Link.forge({ url: uri, user_id: req.session.uid }).fetch().then(function(found) {
     if (found) {
       res.send(200, found.attributes);
+      console.log("found for somereason");
     } else {
       util.getUrlTitle(uri, function(err, title) {
         if (err) {
@@ -141,6 +142,7 @@ app.post('/links', checkUser, function(req, res) {
 
         link.save().then(function(newLink) {
           Links.add(newLink);
+          Links = Links.reset();
           console.log(newLink);
           res.send(200, newLink);
         });
