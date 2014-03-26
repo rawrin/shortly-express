@@ -2,6 +2,7 @@ var express = require('express');
 var util = require('./lib/utility');
 var partials = require('express-partials');
 var bcrypt = require('bcrypt-nodejs');
+var cors = require('cors');
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -18,10 +19,12 @@ bcrypt = Promise.promisifyAll(bcrypt);
 app.configure(function() {
   app.set('views', __dirname + '/views');
   app.set('view engine', 'ejs');
+  app.use(cors());
   app.use(partials());
   app.use(express.bodyParser());
+  app.use(express.json());
   app.use(express.cookieParser('This is a super duper secret thing'));
-  app.use(express.cookieSession());
+  app.use(express.session({secret: "purple", key:"something", store: new express.session.MemoryStore()}));
   app.use(express.static(__dirname + '/public'));
 });
 
@@ -29,8 +32,19 @@ var checkUser = function(req, res, next) {
   if (req.session){
     if(req.session.loggedIn) return next();
   }
-  res.redirect('/login');
+  if (req.body.json) {
+    res.send({success: false});
+  } else {
+    res.redirect('/login');
+  }
 }
+
+app.get('/isLoggedIn', checkUser, function(req, res){
+  res.send({
+    success: true,
+    username: req.session.user
+  });
+});
 
 app.get('/', checkUser, function(req, res) {
   console.log("Origin:", req.headers.origin);
@@ -38,7 +52,8 @@ app.get('/', checkUser, function(req, res) {
 });
 
 app.get('/login', function(req, res) {
-  res.render('login');
+  res.render('index');
+  //res.render('login');
 });
 
 app.get('/logout', function(req, res) {
@@ -49,7 +64,8 @@ app.get('/logout', function(req, res) {
 });
 
 app.get('/signup', function(req, res) {
-  res.render('signup');
+  res.render('index');
+  //res.render('signup');
 });
 
 app.get('/create', function(req, res) {
@@ -57,13 +73,11 @@ app.get('/create', function(req, res) {
 });
 
 app.get('/links', checkUser, function(req, res) {
-  Links
-    .reset()
-    .query()
+  db.knex('urls')
+    .select()
     .where('user_id', '=', req.session.uid)
-    //.fetch()
-    .then(function(links) {
-      console.log("FETCHED LINKS ARE:", links);
+    .then(function(links){
+      console.log("KNEX QUERY HAS:", links);
       res.send(200, links);
     });
 });
@@ -79,7 +93,11 @@ app.post('/signup', function(req, res) {
     User.forge({username: req.body.username, password: req.body.password}).save().then(function(user){
       req.session.loggedIn = true;
       req.session.user = user;
-      res.redirect('/');
+      if (req.body.json){
+        res.send({success: true, username: req.body.username});
+      } else {
+        res.redirect('/');
+      }
     });
   })
 });
@@ -88,8 +106,10 @@ app.post('/login', function(req, res) {
   var uid;
   User.forge({username: req.body.username}).fetch()
   .then(function(row){
+    console.log(row);
     uid = row.attributes.id;
-    return bcrypt.compareAsync(req.body.password, row.attributes.password);
+    // return bcrypt.compareAsync(req.body.password, row.attributes.password);
+    return row.compareHash(req.body.password);
   })
   .then(function(match){
     if(match) {

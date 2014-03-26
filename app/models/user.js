@@ -28,6 +28,9 @@ var User = db.Model.extend({
           console.log(err);
         });
     });
+  },
+  compareHash: function(password) {
+    return bcrypt.compareAsync(password, this.get("password"));
   }
 });
 
